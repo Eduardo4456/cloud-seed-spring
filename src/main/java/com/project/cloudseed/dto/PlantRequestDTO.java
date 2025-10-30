@@ -1,15 +1,16 @@
 package com.project.cloudseed.dto;
 
+
 import com.project.cloudseed.model.WateringFrequency;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter
+@Setter
 public class PlantRequestDTO {
     private String name;
     private String species;
@@ -20,6 +21,8 @@ public class PlantRequestDTO {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    @Getter
+    @Setter
     public static class ScheduleRequestDTO {
         private WateringFrequency frequency;
         private LocalDate lastWateringDate;

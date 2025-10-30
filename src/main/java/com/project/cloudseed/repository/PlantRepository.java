@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PlantRepository extends JpaRepository<Plant, Long> {
-    List<Plant> findByUsers_Id(Long userId);
+    List<Plant> findByUser_Id(Long userId);
 
-    Optional<Plant> findByIdAndUsers_Id(Long plantId, Long userId);
+    Optional<Plant> findByIdAndUser_Id(Long plantId, Long userId);
 }
