@@ -3,15 +3,16 @@ package com.project.cloudseed.service;
 import com.project.cloudseed.dto.PlantRequestDTO;
 import com.project.cloudseed.dto.PlantResponseDTO;
 import com.project.cloudseed.model.Plant;
-import com.project.cloudseed.model.Schedule;
+import com.project.cloudseed.model.Schedule; // Entidade Schedule
 import com.project.cloudseed.model.User;
 import com.project.cloudseed.repository.PlantRepository;
 import com.project.cloudseed.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class PlantService {
@@ -25,24 +26,44 @@ public class PlantService {
 
     @Transactional
     public PlantResponseDTO createPlant(Long userId, PlantRequestDTO plantDTO) {
-        //Encontrar user
+        // 1. Encontrar user
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado com ID: " + userId));
 
-        //DTO de Requisição para Entidade Plant
+        // 2. DTO de Requisição para Entidade Plant
         Plant plantToSave = mapToPlant(plantDTO);
 
-        //relacionamento entre plant e user
+        // 3. Relacionamento entre plant e user
         plantToSave.setUser(user);
 
+        // 4. Relacionamento bidirecional com Schedule (se existir)
         if(plantToSave.getSchedule() != null) {
+            // Este é um passo crucial para o CascadeType.ALL funcionar no OneToOne
             plantToSave.getSchedule().setPlant(plantToSave);
         }
 
-        //salvar plant
+        // 5. Salvar plant
         Plant savedPlant = plantRepository.save(plantToSave);
 
         return mapToResponseDTO(savedPlant);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlantResponseDTO> findAllPlants() {
+        List<Plant> plants = plantRepository.findAll();
+
+        // Converte cada entidade para PlantResponseDTO
+        return plants.stream()
+                .map(this::mapToResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public PlantResponseDTO findPlantById(Long plantId) {
+        Plant plant = plantRepository.findById(plantId)
+                .orElseThrow(() -> new RuntimeException("Planta não encontrada com ID: " + plantId));
+
+        return mapToResponseDTO(plant);
     }
 
     private Plant mapToPlant(PlantRequestDTO dto) {
@@ -53,12 +74,16 @@ public class PlantService {
         plant.setCreatedAt(LocalDateTime.now());
 
         if (dto.getSchedule() != null) {
-            Schedule schedule = new Schedule();
-
             PlantRequestDTO.ScheduleRequestDTO scheduleDTO = dto.getSchedule();
 
+            Schedule schedule = new Schedule();
+
+            // Mapeamento dos campos do Schedule
             schedule.setFrequency(scheduleDTO.getFrequency());
             schedule.setLastWateringDate(scheduleDTO.getLastWateringDate());
+            // ⚠️ FALTA: Se você tiver intervalDays ou outros campos no Schedule, mapeie aqui.
+
+            plant.setSchedule(schedule);
         }
 
         return plant;
@@ -78,6 +103,8 @@ public class PlantService {
             scheduleDTO.setId(plant.getSchedule().getId());
             scheduleDTO.setFrequency(plant.getSchedule().getFrequency());
             scheduleDTO.setLastWateringDate(plant.getSchedule().getLastWateringDate());
+
+            dto.setSchedule(scheduleDTO);
         }
 
         return dto;

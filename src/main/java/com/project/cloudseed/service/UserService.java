@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -31,6 +33,16 @@ public class UserService {
 
         // 3. Mapeamento Manual: Entidade Salva para DTO de Resposta
         return mapToResponseDTO(savedUser);
+    }
+
+    public List<UserResponseDTO> findAllUsers() {
+        // 1. Usa o método padrão findAll() do JpaRepository
+        List<User> users = userRepository.findAll();
+
+        // 2. Converte a lista de entidades User para a lista de DTOs UserResponseDTO
+        return users.stream()
+                .map(UserResponseDTO::fromUser) // ⚠️ Requer o método estático 'fromUser' no seu DTO
+                .collect(Collectors.toList());
     }
 
     private User mapToUser(UserRequestDTO dto) {
