@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import static org.springframework.data.jpa.domain.AbstractPersistable_.id;
+
 @RestController
 @RequestMapping("/plants")
 public class PlantController {
@@ -44,4 +46,16 @@ public class PlantController {
 
         return ResponseEntity.ok(plant); // Retorna 200 OK com a planta
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PlantResponseDTO> updatePlant(
+            @PathVariable Long id,
+            @RequestBody PlantRequestDTO plantDTO) {
+
+        PlantResponseDTO updatedPlant = plantService.updatePlant(id, plantDTO);
+
+        // Retorna 200 OK com o recurso atualizado
+        return ResponseEntity.ok(updatedPlant);
+    }
+
 }

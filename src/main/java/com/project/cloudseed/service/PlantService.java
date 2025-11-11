@@ -109,4 +109,35 @@ public class PlantService {
 
         return dto;
     }
+
+    public PlantResponseDTO updatePlant(Long plantId, PlantRequestDTO dto) {
+        //encontrando planta existente
+        Plant existingPlant = plantRepository.findById(plantId)
+                .orElseThrow(() -> new RuntimeException("Planta não encontrada, id:" + plantId));
+
+
+        existingPlant.setName(dto.getName());
+        existingPlant.setSpecies(dto.getSpecies());
+        existingPlant.setLocation(dto.getLocation());
+
+        if (dto.getSchedule() != null) {
+            Schedule existingSchedule = existingPlant.getSchedule() != null ?
+                    existingPlant.getSchedule() : new Schedule();
+
+            PlantRequestDTO.ScheduleRequestDTO scheduleDTO = dto.getSchedule();
+
+            existingSchedule.setFrequency(scheduleDTO.getFrequency());
+            existingSchedule.setLastWateringDate(scheduleDTO.getLastWateringDate());
+
+            // Se foi uma Schedule nova, precisa associar
+            if (existingPlant.getSchedule() == null) {
+                existingSchedule.setPlant(existingPlant);
+                existingPlant.setSchedule(existingSchedule);
+            }
+        }
+
+        Plant updatedPlant = plantRepository.save(existingPlant);
+
+        return mapToResponseDTO(updatedPlant);
+    }
 }
