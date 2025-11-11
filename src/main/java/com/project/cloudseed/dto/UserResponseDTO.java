@@ -24,6 +24,8 @@ public class UserResponseDTO {
         dto.setUsername(user.getUsername());
         dto.setEmail(user.getEmail());
 
+        dto.setCreatedAt(user.getCreatedAt());
+
         return dto;
     }
 }

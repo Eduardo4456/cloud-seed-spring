@@ -31,8 +31,11 @@ public class UserService {
         // 2. Salvar o Usuário
         User savedUser = userRepository.save(userToSave);
 
-        // 3. Mapeamento Manual: Entidade Salva para DTO de Resposta
-        return mapToResponseDTO(savedUser);
+        User freshUser = userRepository.findById(savedUser.getId())
+                .orElseThrow(() -> new RuntimeException("Falha ao recuperar o usuário recém-criado para obter o createdAt."));
+
+        // 3. Retorna o objeto recarregado
+        return UserResponseDTO.fromUser(freshUser);
     }
 
     public List<UserResponseDTO> findAllUsers() {
@@ -62,7 +65,22 @@ public class UserService {
         dto.setId(user.getId());
         dto.setUsername(user.getUsername());
         dto.setEmail(user.getEmail());
-        dto.setCreatedAt(user.getCreatedAt());
+        //dto.setCreatedAt(user.getCreatedAt());
         return dto;
+    }
+
+    @Transactional
+    public UserResponseDTO updateUser(Long userId, UserRequestDTO dto) {
+        User existingUser = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado com ID: " + userId));
+
+        existingUser.setUsername(dto.getUsername());
+        existingUser.setEmail(dto.getEmail());
+
+        //implementar endpoint para alteração de senhas
+
+        User updatedUser = userRepository.save(existingUser);
+
+        return UserResponseDTO.fromUser(updatedUser);
     }
 }
