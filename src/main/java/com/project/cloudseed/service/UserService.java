@@ -83,4 +83,15 @@ public class UserService {
 
         return UserResponseDTO.fromUser(updatedUser);
     }
+
+    @Transactional
+    public void deleteUser(Long userId) {
+
+
+        if (!userRepository.existsById(userId)) {
+            throw new RuntimeException("Usuário não encontrado com ID: " + userId);
+        }
+
+        userRepository.deleteById(userId);
+    }
 }

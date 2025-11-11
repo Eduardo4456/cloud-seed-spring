@@ -140,4 +140,13 @@ public class PlantService {
 
         return mapToResponseDTO(updatedPlant);
     }
+
+    @Transactional
+    public void deletePlant(Long plantId) {
+        if (!plantRepository.existsById(plantId)) {
+            throw new RuntimeException("Planta não encontrada com ID: " + plantId);
+        }
+
+        plantRepository.deleteById(plantId);
+    }
 }

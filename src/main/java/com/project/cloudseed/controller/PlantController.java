@@ -58,4 +58,12 @@ public class PlantController {
         return ResponseEntity.ok(updatedPlant);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletePlant(@PathVariable Long id) {
+        plantService.deletePlant(id);
+
+        // Retorna 204 No Content
+        return ResponseEntity.noContent().build();
+    }
+
 }
