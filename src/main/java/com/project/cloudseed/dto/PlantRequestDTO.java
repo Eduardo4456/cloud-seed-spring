@@ -1,6 +1,4 @@
 package com.project.cloudseed.dto;
-
-
 import com.project.cloudseed.model.WateringFrequency;
 import lombok.*;
 
