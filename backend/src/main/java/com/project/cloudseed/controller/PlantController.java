@@ -11,6 +11,7 @@ import java.util.List;
 
 import static org.springframework.data.jpa.domain.AbstractPersistable_.id;
 
+@CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/plants")
 public class PlantController {
