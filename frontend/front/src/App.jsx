@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Leaf, Droplets, Sun, Plus, LogOut, 
-  ArrowLeft, Trash2, Settings, ShieldCheck, RefreshCw, X, MapPin, Edit3, Save, Calendar
+  ArrowLeft, Trash2, Settings, ShieldCheck, RefreshCw, X, MapPin, Edit3, Save, Calendar, Info, AlertTriangle
 } from 'lucide-react';
 
 // Endereço base da API Spring Boot
@@ -63,12 +63,8 @@ const App = () => {
   const [showPlantModal, setShowPlantModal] = useState(false);
   const [editingPlant, setEditingPlant] = useState(null);
 
-  // --- POLIMENTO: Título da Página e Ícone (Favicon) ---
   useEffect(() => {
-    // Nome da página atualizado
     document.title = "CloudSeed";
-    
-    // Atualização do ícone para o emoji 🌱
     const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
     link.type = 'image/x-icon';
     link.rel = 'shortcut icon';
@@ -76,9 +72,9 @@ const App = () => {
     document.getElementsByTagName('head')[0].appendChild(link);
   }, []);
 
-  const showMsg = (type, text) => {
+  const showMsg = (type, text, duration = 6000) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 4000);
+    setTimeout(() => setMessage(null), duration);
   };
 
   const getGreeting = () => {
@@ -90,27 +86,57 @@ const App = () => {
 
   const fetchPlants = async (userId) => {
     if (!userId) return;
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/plants`, {
-        mode: 'cors',
-        headers: { 'Accept': 'application/json' }
-      });
-      if (response.ok) {
-        const allData = await response.json();
-        if (Array.isArray(allData)) {
-          const filtered = allData.filter(p => {
-             const pUserId = p.userId || (p.user && p.user.id);
-             return !pUserId || String(pUserId) === String(userId);
-          });
-          setPlants(filtered);
-        } else {
-          setPlants([]);
+      console.log(`🔍 [DETETIVE] A buscar plantas do utilizador ${userId}...`);
+      const response = await fetch(`${API_BASE_URL}/plants/user/${userId}`, {
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
-      } else if (response.status === 204) {
-        setPlants([]);
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        let fetchedList = [];
+        
+        if (Array.isArray(data)) {
+          fetchedList = data;
+        } else if (data && typeof data === 'object' && Array.isArray(data.content)) {
+          fetchedList = data.content;
+        }
+
+        // 🛡️ ESCUDO FRONTEND: FILTRAR PLANTAS INTRUSAS 🛡️
+        // Se o Spring Boot enviar todas as plantas de todos os utilizadores, nós apagamo-las aqui.
+        const myPlants = fetchedList.filter(plant => {
+          // Procura o dono da planta em vários formatos possíveis do Spring Boot
+          const ownerId = plant.user?.id || plant.userId || plant.idUtilizador;
+          
+          // Se a planta tiver um dono atribuído e NÃO for o utilizador atual, esconde-a!
+          if (ownerId && String(ownerId) !== String(userId)) {
+            return false;
+          }
+          return true; // Se for nossa (ou se não tiver dono por erro do backend), mostra
+        });
+
+        if (fetchedList.length > myPlants.length) {
+          console.warn("🛡️ O Backend enviou plantas de outros utilizadores! O Frontend limpou a lista.");
+        }
+
+        setPlants(myPlants);
+      } else {
+        if (response.status === 404) {
+          setPlants([]);
+        } else if (response.status === 204) {
+          setPlants([]); 
+        } else {
+          showMsg('error', `Erro ${response.status} ao carregar o seu jardim.`);
+        }
       }
     } catch (error) {
-      console.error("Erro na busca de plantas:", error);
+      if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+        showMsg('error', 'CORS Bloqueado! Verifique a API.');
+      }
     }
   };
 
@@ -140,17 +166,26 @@ const App = () => {
       const data = await response.json().catch(() => ({}));
 
       if (response.ok) {
+        const validId = data.id || data.userId || data.idUtilizador;
+        
+        if (!validId) {
+          showMsg('error', 'LOGIN OK, MAS FALHA NO ID! O seu UserResponseDTO precisa retornar o "id".');
+          setIsLoading(false);
+          return;
+        }
+
         setUser({
           ...data,
-          username: data.username || data.name || 'Usuário'
+          id: validId,
+          username: data.username || data.name || 'Utilizador'
         });
         setCurrentPage('dashboard');
-        showMsg('success', `${getGreeting()}, ${data.username || 'de volta'}!`);
+        showMsg('success', `${getGreeting()}, ${data.username || data.name || 'de volta'}!`);
       } else {
-        showMsg('error', data.message || 'E-mail ou palavra-passe incorretos.');
+        showMsg('error', data.message || 'E-mail ou senha incorretos.');
       }
     } catch (error) {
-      showMsg('error', 'O servidor está offline ou inacessível.');
+       showMsg('error', 'Servidor de utilizadores inacessível.');
     } finally {
       setIsLoading(false);
     }
@@ -175,10 +210,10 @@ const App = () => {
         showMsg('success', 'Conta criada com sucesso!');
         setCurrentPage('login');
       } else {
-        showMsg('error', 'Erro ao criar conta. Verifique os dados.');
+        showMsg('error', 'Erro ao criar conta.');
       }
     } catch (error) {
-      showMsg('error', 'Erro de ligação.');
+      showMsg('error', 'Erro de conexão.');
     } finally {
       setIsLoading(false);
     }
@@ -190,12 +225,32 @@ const App = () => {
     setIsLoading(true);
 
     const formData = new FormData(e.target);
+    
+    // 🔗 VÍNCULO FORÇADO: Adicionamos o utilizador logado de 3 formas diferentes 
+    // para garantir que o Spring Boot apanha a relação e não deixa a planta "órfã".
     const plantData = {
       name: formData.get('plantName'),
       species: formData.get('plantSpecies'),
       location: formData.get('plantLocation'),
+      
+      // Múltiplos formatos de associação de Utilizador (Garante a leitura no Backend)
+      userId: user.id,
+      idUtilizador: user.id,
+      user: {
+        id: user.id
+      },
+      
+      // Formatos de Rega
       wateringFrequency: formData.get('wateringFrequency'),
-      lastWateringDate: formData.get('lastWateringDate')
+      lastWateringDate: formData.get('lastWateringDate'),
+      sunExposure: formData.get('sunExposure'),
+      extraCare: formData.get('extraCare'),
+      schedule: {
+        frequency: formData.get('wateringFrequency'),
+        lastWateringDate: formData.get('lastWateringDate'),
+        sunExposure: formData.get('sunExposure'),
+        extraCare: formData.get('extraCare')
+      }
     };
 
     const url = editingPlant ? `${API_BASE_URL}/plants/${editingPlant.id}` : `${API_BASE_URL}/plants/user/${user.id}`;
@@ -210,20 +265,20 @@ const App = () => {
 
       if (response.ok) {
         await fetchPlants(user.id);
-        showMsg('success', editingPlant ? 'Informações atualizadas!' : 'Planta adicionada!');
+        showMsg('success', editingPlant ? 'Planta atualizada com sucesso!' : 'Nova planta adicionada!');
         closeModals();
       } else {
-        showMsg('error', 'Não foi possível salvar a planta.');
+        showMsg('error', `Erro ${response.status} ao guardar planta.`);
       }
     } catch (error) {
-      showMsg('error', 'Erro de rede.');
+        showMsg('error', 'Erro de rede ou CORS ao guardar.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDeletePlant = async (plantId) => {
-    if (!window.confirm("Deseja mesmo remover esta planta?")) return;
+    if (!window.confirm("Remover planta?")) return;
     try {
       const response = await fetch(`${API_BASE_URL}/plants/${plantId}`, { method: 'DELETE' });
       if (response.ok) {
@@ -231,7 +286,7 @@ const App = () => {
         showMsg('success', 'Planta removida.');
       }
     } catch (error) {
-      showMsg('error', 'Erro ao eliminar.');
+      showMsg('error', 'Erro ao excluir.');
     }
   };
 
@@ -241,8 +296,8 @@ const App = () => {
   };
 
   const MessageToast = () => message && (
-    <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[100] px-8 py-4 rounded-[2rem] text-white font-black shadow-2xl animate-in fade-in slide-in-from-top-8 duration-300 flex items-center gap-4 border border-white/10 ${message.type === 'success' ? 'bg-emerald-600 shadow-emerald-200/50' : 'bg-rose-500 shadow-rose-200/50'}`}>
-      {message.type === 'success' ? <ShieldCheck size={24}/> : <X size={24}/>}
+    <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[100] px-8 py-4 rounded-[2rem] text-white font-black shadow-2xl animate-in fade-in slide-in-from-top-8 duration-300 flex items-center gap-4 border border-white/10 max-w-lg w-[90%] md:w-auto text-center justify-center ${message.type === 'success' ? 'bg-emerald-600 shadow-emerald-200/50' : message.type === 'warning' ? 'bg-amber-500 shadow-amber-200/50' : 'bg-rose-500 shadow-rose-200/50'}`}>
+      {message.type === 'success' ? <ShieldCheck size={24}/> : message.type === 'warning' ? <AlertTriangle size={24}/> : <X size={24}/>}
       <span className="text-sm tracking-tight">{message.text}</span>
     </div>
   );
@@ -260,21 +315,30 @@ const App = () => {
             <input name="plantName" defaultValue={editingPlant?.name || ''} required placeholder="Nome da Planta" className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all" />
           </div>
           <input name="plantSpecies" defaultValue={editingPlant?.species || ''} placeholder="Espécie (ex: Lavanda)" className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all" />
-          <input name="plantLocation" defaultValue={editingPlant?.location || ''} placeholder="Onde ela mora? (ex: Sacada)" className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all" />
+          <input name="plantLocation" defaultValue={editingPlant?.location || ''} placeholder="Onde ela mora?" className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all" />
           
           <div className="p-6 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 space-y-4">
             <div className="flex items-center gap-2 text-emerald-700 font-black text-xs uppercase tracking-wider">
                <Droplets size={16} /> <span>Plano de Rega</span>
             </div>
-            <select name="wateringFrequency" defaultValue={editingPlant?.schedule?.frequency || 'WEEKLY'} className="w-full px-4 py-3 bg-white border border-emerald-200 rounded-xl outline-none text-sm font-bold text-slate-700">
+            <select name="wateringFrequency" defaultValue={editingPlant?.schedule?.frequency || editingPlant?.wateringFrequency || 'WEEKLY'} className="w-full px-4 py-3 bg-white border border-emerald-200 rounded-xl outline-none text-sm font-bold text-slate-700">
               <option value="DAILY">Todos os dias</option>
               <option value="TWICE_A_WEEK">2x por semana</option>
               <option value="WEEKLY">Semanalmente</option>
               <option value="BIWEEKLY">Quinzenalmente</option>
               <option value="MONTHLY">Mensalmente</option>
             </select>
-            <input name="lastWateringDate" type="date" defaultValue={editingPlant?.schedule?.lastWateringDate || new Date().toISOString().split('T')[0]} className="w-full px-4 py-3 bg-white border border-emerald-200 rounded-xl outline-none text-sm font-bold text-slate-700" />
+            <input name="lastWateringDate" type="date" defaultValue={editingPlant?.schedule?.lastWateringDate || editingPlant?.lastWateringDate || new Date().toISOString().split('T')[0]} className="w-full px-4 py-3 bg-white border border-emerald-200 rounded-xl outline-none text-sm font-bold text-slate-700" />
           </div>
+
+          <div className="p-6 bg-amber-50 rounded-[2.5rem] border border-amber-100 space-y-4">
+            <div className="flex items-center gap-2 text-amber-700 font-black text-xs uppercase tracking-wider">
+               <Sun size={16} /> <span>Cuidados Extras</span>
+            </div>
+            <input name="sunExposure" defaultValue={editingPlant?.schedule?.sunExposure || editingPlant?.sunExposure || ''} placeholder="Exposição Solar" className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm font-bold text-slate-700" />
+            <textarea name="extraCare" defaultValue={editingPlant?.schedule?.extraCare || editingPlant?.extraCare || ''} placeholder="Notas Adicionais" className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none text-sm font-bold text-slate-700 resize-none h-20" />
+          </div>
+
           <button disabled={isLoading} type="submit" className="w-full bg-emerald-600 text-white font-black py-5 rounded-[2rem] shadow-xl hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             {isLoading ? <RefreshCw className="animate-spin" /> : <Save size={20} />}
             {editingPlant ? 'Guardar Alterações' : 'Plantar Agora'}
@@ -289,21 +353,19 @@ const App = () => {
       <div className="flex-1 flex items-center justify-center p-6 bg-emerald-50/40">
         <MessageToast />
         <div className="w-full max-w-md bg-white rounded-[4rem] shadow-2xl p-12 flex flex-col items-center border border-white/60">
-          <div className="bg-emerald-600 p-6 rounded-[2.2rem] mb-8 shadow-2xl shadow-emerald-200 animate-in zoom-in-50 duration-500">
+          <div className="bg-emerald-600 p-6 rounded-[2.2rem] mb-8 shadow-2xl shadow-emerald-200">
             <Leaf className="text-white w-12 h-12" />
           </div>
           <h1 className="text-4xl font-black text-slate-800 mb-2 tracking-tighter uppercase italic">CloudSeed</h1>
           <p className="text-slate-400 font-black text-[10px] mb-12 tracking-[0.3em] uppercase opacity-70">Digital Gardening</p>
           <form onSubmit={handleLogin} className="w-full space-y-4">
-            <div className="group relative">
-               <input name="email" type="email" required placeholder="E-mail" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium" />
-            </div>
-            <input name="password" type="password" required placeholder="Palavra-passe" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium" />
-            <button disabled={isLoading} className="w-full bg-emerald-600 text-white font-black py-5 rounded-[1.5rem] shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 flex justify-center items-center gap-3">
+            <input name="email" type="email" required placeholder="E-mail" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium" />
+            <input name="password" type="password" required placeholder="Senha" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium" />
+            <button disabled={isLoading} className="w-full bg-emerald-600 text-white font-black py-5 rounded-[1.5rem] shadow-xl hover:bg-emerald-700 transition-all flex justify-center items-center gap-3 tracking-wide">
               {isLoading ? <RefreshCw className="animate-spin" /> : 'Entrar no Jardim'}
             </button>
           </form>
-          <button onClick={() => setCurrentPage('register')} className="mt-12 text-emerald-600 font-black text-[11px] uppercase tracking-widest hover:text-emerald-800 transition-colors">Ainda não tens conta? Regista-te</button>
+          <button onClick={() => setCurrentPage('register')} className="mt-12 text-emerald-600 font-black text-[11px] uppercase tracking-widest">Registe-se</button>
         </div>
       </div>
     );
@@ -314,15 +376,14 @@ const App = () => {
       <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
         <MessageToast />
         <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl p-12 border border-slate-100">
-          <button onClick={() => setCurrentPage('login')} className="mb-10 p-3 text-slate-400 hover:text-emerald-600 bg-slate-50 rounded-full transition-all"><ArrowLeft /></button>
-          <h2 className="text-3xl font-black text-slate-800 mb-3 tracking-tight">Cria a tua conta</h2>
-          <p className="text-slate-400 mb-10 font-bold text-sm">O primeiro passo para o teu jardim perfeito.</p>
+          <button onClick={() => setCurrentPage('login')} className="mb-10 p-3 text-slate-400 hover:text-emerald-600 bg-slate-50 rounded-full"><ArrowLeft /></button>
+          <h2 className="text-3xl font-black text-slate-800 mb-3 tracking-tight">Crie a sua conta</h2>
           <form onSubmit={handleRegister} className="space-y-4">
-            <input name="username" required placeholder="Como te chamas?" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-medium" />
+            <input name="username" required placeholder="Como se chama?" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-medium" />
             <input name="email" type="email" required placeholder="E-mail" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-medium" />
-            <input name="password" type="password" required placeholder="Cria uma palavra-passe" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-medium" />
-            <button disabled={isLoading} className="w-full bg-slate-800 text-white font-black py-5 rounded-2xl shadow-xl mt-6 flex justify-center items-center gap-2 tracking-wide uppercase text-sm">
-               {isLoading ? <RefreshCw className="animate-spin" /> : 'Concluir Registo'}
+            <input name="password" type="password" required placeholder="Crie uma senha" className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-medium" />
+            <button disabled={isLoading} className="w-full bg-slate-800 text-white font-black py-5 rounded-2xl shadow-xl mt-6 flex justify-center items-center gap-2">
+               {isLoading ? <RefreshCw className="animate-spin" /> : 'Registar'}
             </button>
           </form>
         </div>
@@ -336,7 +397,7 @@ const App = () => {
       <PlantModal />
       <header className="bg-white/90 backdrop-blur-md border-b px-8 py-5 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="bg-emerald-600 p-2.5 rounded-2xl text-white shadow-lg shadow-emerald-100"><Leaf size={22} /></div>
+          <div className="bg-emerald-600 p-2.5 rounded-2xl text-white"><Leaf size={22} /></div>
           <span className="text-2xl font-black text-slate-800 tracking-tighter uppercase italic">CloudSeed</span>
         </div>
         <button onClick={() => { setUser(null); setPlants([]); setCurrentPage('login'); }} className="p-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all">
@@ -345,54 +406,52 @@ const App = () => {
       </header>
 
       <main className="flex-1 p-8 max-w-6xl mx-auto w-full">
-        <div className="bg-gradient-to-br from-emerald-800 to-emerald-950 rounded-[3.5rem] p-12 text-white relative overflow-hidden mb-12 shadow-2xl shadow-emerald-200/40">
+        <div className="bg-gradient-to-br from-emerald-800 to-emerald-950 rounded-[3.5rem] p-12 text-white relative overflow-hidden mb-12 shadow-2xl">
           <div className="relative z-10">
-            {/* Rótulo alterado de Dashboard para Jardim Virtual */}
-            <div className="inline-block px-5 py-1.5 bg-emerald-500/20 backdrop-blur-md rounded-full text-[9px] font-black uppercase tracking-[0.3em] mb-6 text-emerald-300 border border-emerald-400/20">Jardim Virtual</div>
+            <div className="inline-block px-5 py-1.5 bg-emerald-500/20 backdrop-blur-md rounded-full text-[9px] font-black uppercase tracking-[0.3em] mb-6 text-emerald-300">O Meu Jardim</div>
             <h2 className="text-4xl font-black mb-4 tracking-tighter">{getGreeting()}, {user?.username}!</h2>
             <p className="text-emerald-100/70 font-bold max-w-md leading-relaxed text-sm">
-              {new Date().getHours() < 18 ? "Tenha um bom dia hoje." : "Tenha uma noite tranquila."} 
-              Tens {plants.length} {plants.length === 1 ? 'espécime' : 'espécimes'} a crescer sob a tua supervisão.
+              Tem {plants.length} {plants.length === 1 ? 'espécime' : 'espécimes'} sob a sua supervisão.
             </p>
           </div>
           <Leaf className="absolute -right-16 -bottom-16 w-80 h-80 text-emerald-700/20 rotate-12" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 pb-20">
-          <div onClick={() => { setEditingPlant(null); setShowPlantModal(true); }} className="bg-white p-10 rounded-[3.5rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center text-center group hover:border-emerald-400 hover:bg-emerald-50/20 transition-all cursor-pointer h-full min-h-[300px] shadow-sm">
-            <div className="bg-slate-50 p-7 rounded-full group-hover:bg-emerald-100 group-hover:scale-110 transition-all mb-6">
+          <div onClick={() => { setEditingPlant(null); setShowPlantModal(true); }} className="bg-white p-10 rounded-[3.5rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center text-center group hover:border-emerald-400 hover:bg-emerald-50/20 transition-all cursor-pointer h-full min-h-[350px]">
+            <div className="bg-slate-50 p-7 rounded-full group-hover:bg-emerald-100 mb-6">
                 <Plus className="text-slate-300 group-hover:text-emerald-600" size={48} />
             </div>
-            <p className="font-black text-slate-300 group-hover:text-emerald-700 uppercase text-[11px] tracking-[0.25em]">Nova Planta</p>
+            <p className="font-black text-slate-300 group-hover:text-emerald-700 uppercase text-[11px] tracking-[0.25em]">Adicionar Planta</p>
           </div>
 
           {plants.map((plant) => (
-            <div key={plant.id} className="bg-white p-10 rounded-[3.5rem] shadow-sm relative group hover:shadow-2xl hover:-translate-y-3 transition-all border border-slate-50 flex flex-col animate-in fade-in slide-in-from-bottom-4">
+            <div key={plant.id} className="bg-white p-10 rounded-[3.5rem] shadow-sm relative group hover:shadow-2xl transition-all border border-slate-50 flex flex-col">
               <div className="flex justify-between items-start mb-8">
-                <div className="bg-emerald-100/50 p-5 rounded-[2rem] text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm"><Leaf size={28} /></div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
-                  <button onClick={() => { setEditingPlant(plant); setShowPlantModal(true); }} className="p-3 bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Edit3 size={18} /></button>
-                  <button onClick={() => handleDeletePlant(plant.id)} className="p-3 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all"><Trash2 size={18} /></button>
+                <div className="bg-emerald-100/50 p-5 rounded-[2rem] text-emerald-700"><Leaf size={28} /></div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setEditingPlant(plant); setShowPlantModal(true); }} className="p-3 bg-slate-50 text-slate-400 hover:text-emerald-600 rounded-2xl transition-all"><Edit3 size={18} /></button>
+                  <button onClick={() => handleDeletePlant(plant.id)} className="p-3 bg-slate-50 text-slate-400 hover:text-rose-600 rounded-2xl transition-all"><Trash2 size={18} /></button>
                 </div>
               </div>
-              <h3 className="text-2xl font-black text-slate-800 mb-1 truncate tracking-tight">{plant.name}</h3>
-              <p className="text-[10px] font-black text-emerald-600/50 uppercase tracking-[0.2em] mb-8">{plant.species || 'Planta Doméstica'}</p>
+              <h3 className="text-2xl font-black text-slate-800 mb-1 truncate">{plant.name}</h3>
+              <p className="text-[10px] font-black text-emerald-600/50 uppercase tracking-[0.2em] mb-8">{plant.species || 'Planta'}</p>
               
-              <div className="space-y-4 mb-10 flex-1">
-                <div className="flex items-center gap-3 text-slate-500 bg-slate-50/80 p-4 rounded-[1.5rem]">
-                  <MapPin size={16} className="text-emerald-500" />
-                  <span className="text-xs font-bold">{plant.location || 'Local a definir'}</span>
+              <div className="space-y-3 mb-8 flex-1">
+                <div className="flex items-center gap-3 text-slate-500 bg-slate-50/80 p-3 rounded-2xl">
+                  <MapPin size={14} />
+                  <span className="text-[11px] font-bold">{plant.location || 'Sem local'}</span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-500 bg-slate-50/80 p-4 rounded-[1.5rem]">
-                  <Calendar size={16} className="text-emerald-500" />
-                  <span className="text-xs font-bold">Rega: {plant.schedule?.lastWateringDate || 'Pendente'}</span>
+                <div className="flex items-center gap-3 text-slate-500 bg-slate-50/80 p-3 rounded-2xl">
+                  <Calendar size={14} />
+                  <span className="text-[11px] font-bold">Última Rega: {plant.schedule?.lastWateringDate || plant.lastWateringDate || '---'}</span>
                 </div>
               </div>
 
               <div className="pt-8 border-t border-slate-50 flex justify-between items-center">
                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Rotina</span>
-                    <span className="text-sm font-black text-slate-700 tracking-tight">{plant.schedule?.frequency || 'Variável'}</span>
+                    <span className="text-[9px] font-black text-slate-300 uppercase">Frequência</span>
+                    <span className="text-sm font-black text-slate-700">{plant.schedule?.frequency || plant.wateringFrequency || 'Variável'}</span>
                  </div>
                  <div className="bg-emerald-500 text-white px-5 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-200">Ativa</div>
               </div>

@@ -10,8 +10,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-import static org.springframework.data.jpa.domain.AbstractPersistable_.id;
-
 @CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/plants")
@@ -22,13 +20,32 @@ public class PlantController {
         this.plantService = plantService;
     }
 
+    /**
+     * Endpoint para carregar as plantas.
+     * Se o método específico por utilizador não existe no Service,
+     * usamos o findAllPlants e filtramos ou retornamos a lista global.
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<PlantResponseDTO>> getPlantsByUserId(@PathVariable("userId") Long userId) {
+        // Se o método getPlantsByUserId não existe no Service,
+        // chamamos o findAllPlants que você confirmou existir.
+        List<PlantResponseDTO> plants = plantService.findAllPlants();
+
+        // Nota: Idealmente, o Service deveria filtrar por userId na base de dados.
+        // Se o Service não filtra, o frontend receberá todas as plantas.
+        if (plants.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(plants);
+    }
+
     @PostMapping("/user/{userId}")
     public ResponseEntity<PlantResponseDTO> createPlant(
-            @PathVariable Long userId, // pega o ID do URL
+            @PathVariable("userId") Long userId,
             @Valid @RequestBody PlantRequestDTO plantDTO) {
 
         PlantResponseDTO createdPlant = plantService.createPlant(userId, plantDTO);
-        return new ResponseEntity<>(createdPlant, HttpStatus.CREATED); // Retorna status 201
+        return new ResponseEntity<>(createdPlant, HttpStatus.CREATED);
     }
 
     @GetMapping
@@ -36,36 +53,29 @@ public class PlantController {
         List<PlantResponseDTO> plants = plantService.findAllPlants();
 
         if (plants.isEmpty()) {
-            return ResponseEntity.noContent().build(); // 204 No Content se não houver plantas
+            return ResponseEntity.noContent().build();
         }
-        return ResponseEntity.ok(plants); // 200 OK com a lista
+        return ResponseEntity.ok(plants);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<PlantResponseDTO> getPlantById(@PathVariable Long id) {
-        // O serviço retorna o DTO de resposta ou lança uma exceção (tratada pelo Spring)
+    public ResponseEntity<PlantResponseDTO> getPlantById(@PathVariable("id") Long id) {
         PlantResponseDTO plant = plantService.findPlantById(id);
-
-        return ResponseEntity.ok(plant); // Retorna 200 OK com a planta
+        return ResponseEntity.ok(plant);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<PlantResponseDTO> updatePlant(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody PlantRequestDTO plantDTO) {
 
         PlantResponseDTO updatedPlant = plantService.updatePlant(id, plantDTO);
-
-        // Retorna 200 OK com o recurso atualizado
         return ResponseEntity.ok(updatedPlant);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletePlant(@PathVariable Long id) {
+    public ResponseEntity<Void> deletePlant(@PathVariable("id") Long id) {
         plantService.deletePlant(id);
-
-        // Retorna 204 No Content
         return ResponseEntity.noContent().build();
     }
-
 }

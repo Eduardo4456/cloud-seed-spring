@@ -3,7 +3,7 @@ package com.project.cloudseed.service;
 import com.project.cloudseed.dto.PlantRequestDTO;
 import com.project.cloudseed.dto.PlantResponseDTO;
 import com.project.cloudseed.model.Plant;
-import com.project.cloudseed.model.Schedule; // Entidade Schedule
+import com.project.cloudseed.model.Schedule;
 import com.project.cloudseed.model.User;
 import com.project.cloudseed.repository.PlantRepository;
 import com.project.cloudseed.repository.UserRepository;
@@ -26,33 +26,36 @@ public class PlantService {
 
     @Transactional
     public PlantResponseDTO createPlant(Long userId, PlantRequestDTO plantDTO) {
-        // 1. Encontrar user
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado com ID: " + userId));
 
-        // 2. DTO de Requisição para Entidade Plant
         Plant plantToSave = mapToPlant(plantDTO);
-
-        // 3. Relacionamento entre plant e user
         plantToSave.setUser(user);
 
-        // 4. Relacionamento bidirecional com Schedule (se existir)
         if(plantToSave.getSchedule() != null) {
-            // Este é um passo crucial para o CascadeType.ALL funcionar no OneToOne
             plantToSave.getSchedule().setPlant(plantToSave);
         }
 
-        // 5. Salvar plant
         Plant savedPlant = plantRepository.save(plantToSave);
-
         return mapToResponseDTO(savedPlant);
+    }
+
+    // ⭐ AQUI ESTÁ A FUNÇÃO NOVA QUE FALTAVA ⭐
+    @Transactional(readOnly = true)
+    public List<PlantResponseDTO> getPlantsByUserId(Long userId) {
+        // Vai buscar à base de dados APENAS as plantas deste utilizador
+        List<Plant> userPlants = plantRepository.findByUserId(userId);
+
+        // Converte a lista de entidades para DTOs
+        return userPlants.stream()
+                .map(this::mapToResponseDTO)
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<PlantResponseDTO> findAllPlants() {
         List<Plant> plants = plantRepository.findAll();
 
-        // Converte cada entidade para PlantResponseDTO
         return plants.stream()
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
@@ -75,14 +78,9 @@ public class PlantService {
 
         if (dto.getSchedule() != null) {
             PlantRequestDTO.ScheduleRequestDTO scheduleDTO = dto.getSchedule();
-
             Schedule schedule = new Schedule();
-
-            // Mapeamento dos campos do Schedule
             schedule.setFrequency(scheduleDTO.getFrequency());
             schedule.setLastWateringDate(scheduleDTO.getLastWateringDate());
-            // ⚠️ FALTA: Se você tiver intervalDays ou outros campos no Schedule, mapeie aqui.
-
             plant.setSchedule(schedule);
         }
 
@@ -97,24 +95,26 @@ public class PlantService {
         dto.setLocation(plant.getLocation());
         dto.setCreatedAt(plant.getCreatedAt());
 
+        // ⭐ CORREÇÃO CRUCIAL AQUI: Enviar o userId para o Frontend saber quem é o dono! ⭐
+        if (plant.getUser() != null) {
+            dto.setUserId(plant.getUser().getId());
+        }
+
         if (plant.getSchedule() != null) {
             PlantResponseDTO.ScheduleResponseDTO scheduleDTO = new PlantResponseDTO.ScheduleResponseDTO();
-
             scheduleDTO.setId(plant.getSchedule().getId());
             scheduleDTO.setFrequency(plant.getSchedule().getFrequency());
             scheduleDTO.setLastWateringDate(plant.getSchedule().getLastWateringDate());
-
             dto.setSchedule(scheduleDTO);
         }
 
         return dto;
     }
 
+    @Transactional
     public PlantResponseDTO updatePlant(Long plantId, PlantRequestDTO dto) {
-        //encontrando planta existente
         Plant existingPlant = plantRepository.findById(plantId)
                 .orElseThrow(() -> new RuntimeException("Planta não encontrada, id:" + plantId));
-
 
         existingPlant.setName(dto.getName());
         existingPlant.setSpecies(dto.getSpecies());
@@ -129,7 +129,6 @@ public class PlantService {
             existingSchedule.setFrequency(scheduleDTO.getFrequency());
             existingSchedule.setLastWateringDate(scheduleDTO.getLastWateringDate());
 
-            // Se foi uma Schedule nova, precisa associar
             if (existingPlant.getSchedule() == null) {
                 existingSchedule.setPlant(existingPlant);
                 existingPlant.setSchedule(existingSchedule);
@@ -137,7 +136,6 @@ public class PlantService {
         }
 
         Plant updatedPlant = plantRepository.save(existingPlant);
-
         return mapToResponseDTO(updatedPlant);
     }
 
@@ -146,7 +144,6 @@ public class PlantService {
         if (!plantRepository.existsById(plantId)) {
             throw new RuntimeException("Planta não encontrada com ID: " + plantId);
         }
-
         plantRepository.deleteById(plantId);
     }
 }

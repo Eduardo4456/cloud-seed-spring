@@ -18,6 +18,10 @@ public class PlantResponseDTO {
     private String location;
     private LocalDateTime createdAt;
 
+    // Campo adicionado para que o PlantService consiga usar o setUserId()
+    // e o Frontend consiga saber a quem pertence a planta.
+    private Long userId;
+
     private ScheduleResponseDTO schedule;
 
     @Data

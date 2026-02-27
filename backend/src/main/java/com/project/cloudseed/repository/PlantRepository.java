@@ -10,4 +10,6 @@ public interface PlantRepository extends JpaRepository<Plant, Long> {
     List<Plant> findByUser_Id(Long userId);
 
     Optional<Plant> findByIdAndUser_Id(Long plantId, Long userId);
+
+    List<Plant> findByUserId(Long userId);
 }
