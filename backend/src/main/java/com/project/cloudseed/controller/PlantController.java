@@ -3,6 +3,7 @@ package com.project.cloudseed.controller;
 import com.project.cloudseed.dto.PlantRequestDTO;
 import com.project.cloudseed.dto.PlantResponseDTO;
 import com.project.cloudseed.service.PlantService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,7 +25,7 @@ public class PlantController {
     @PostMapping("/user/{userId}")
     public ResponseEntity<PlantResponseDTO> createPlant(
             @PathVariable Long userId, // pega o ID do URL
-            @RequestBody PlantRequestDTO plantDTO) {
+            @Valid @RequestBody PlantRequestDTO plantDTO) {
 
         PlantResponseDTO createdPlant = plantService.createPlant(userId, plantDTO);
         return new ResponseEntity<>(createdPlant, HttpStatus.CREATED); // Retorna status 201

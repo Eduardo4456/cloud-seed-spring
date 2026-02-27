@@ -1,5 +1,6 @@
 package com.project.cloudseed.service;
 
+import com.project.cloudseed.dto.LoginRequestDTO;
 import com.project.cloudseed.dto.UserRequestDTO;
 import com.project.cloudseed.dto.UserResponseDTO;
 import com.project.cloudseed.model.User;
@@ -20,6 +21,22 @@ public class UserService {
     public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+    }
+
+    public UserResponseDTO authenticate(LoginRequestDTO loginDTO) {
+        // 1. Tenta encontrar o usuário pelo email no repository
+        // Nota: Certifique-se que o seu UserRepository tem o método: Optional<User> findByEmail(String email);
+        User user = userRepository.findByEmail(loginDTO.getEmail())
+                .orElseThrow(() -> new RuntimeException("Utilizador não encontrado com o email: " + loginDTO.getEmail()));
+
+        // 2. Compara a senha em texto puro do DTO com a senha criptografada do banco
+        if (passwordEncoder.matches(loginDTO.getPassword(), user.getPassword())) {
+            // 3. Se coincidir, converte para ResponseDTO usando o seu método existente
+            return UserResponseDTO.fromUser(user);
+        }
+
+        // 4. Se a senha não coincidir, lançamos uma exceção ou retornamos null
+        throw new RuntimeException("Senha incorreta.");
     }
 
     @Transactional

@@ -17,6 +17,7 @@ public class Plant {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
     private String name;
     private String species;
     private String location;
@@ -27,5 +28,6 @@ public class Plant {
     private User user;
 
     @OneToOne(mappedBy = "plant", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    //lembrar de não permitir vazio
     private Schedule schedule;
 }

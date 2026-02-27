@@ -1,5 +1,6 @@
 package com.project.cloudseed.controller;
 
+import com.project.cloudseed.dto.LoginRequestDTO;
 import com.project.cloudseed.dto.UserRequestDTO;
 import com.project.cloudseed.dto.UserResponseDTO;
 import com.project.cloudseed.service.UserService;
@@ -23,6 +24,18 @@ public class UserController {
     public ResponseEntity<UserResponseDTO> createUser(@RequestBody UserRequestDTO userDTO) {
         UserResponseDTO createdUser = userService.createUser(userDTO);
         return new ResponseEntity<>(createdUser, HttpStatus.CREATED);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<UserResponseDTO> login(@RequestBody LoginRequestDTO loginDTO) {
+        UserResponseDTO user = userService.authenticate(loginDTO);
+
+        if (user != null) {
+            return ResponseEntity.ok(user);
+        } else {
+            // Se as credenciais estiverem erradas, retornamos 401 Unauthorized
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
     }
 
     @GetMapping
